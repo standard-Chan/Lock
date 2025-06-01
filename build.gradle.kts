@@ -32,6 +32,9 @@ dependencies {
 
     //MYSQL
     implementation("mysql:mysql-connector-java:8.0.33")
+
+    // in mem
+    implementation ("com.h2database:h2")
 }
 
 tasks.test {
