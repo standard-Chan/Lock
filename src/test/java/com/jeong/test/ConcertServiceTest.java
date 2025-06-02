@@ -1,5 +1,6 @@
-package com.jeong;
+package com.jeong.test;
 
+import com.jeong.service.ConcertService;
 import com.jeong.domain.Concert;
 import com.jeong.repository.ConcertRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -10,8 +11,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import java.time.LocalDateTime;
-
-import static org.junit.jupiter.api.Assertions.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
 @SpringBootTest
@@ -65,5 +68,42 @@ class ConcertServiceTest {
         System.out.println("DB 참가자 수 " + concert.getCurrentParticipants() + "/" + concert.getMaxParticipants());
         System.out.println("increase 메서드 호출 횟수 : " + successCount);
 
+    }
+
+    @Test
+    @DisplayName("REPEATABLE_READ 트랜잭션으로 병렬 동시성 테스트")
+    public void increaseParticipantsInTransaction() throws InterruptedException {
+        // BeforeEach 영속성 컨텍스트에 저장된 concert 업데이트
+        concert = concertRepository.findById(concert.getId()).orElseThrow();
+
+        int participantsNumber = 200;
+
+        AtomicInteger successCount = new AtomicInteger(0);
+        CountDownLatch countDownLatch = new CountDownLatch(participantsNumber);
+        ExecutorService executor = Executors.newFixedThreadPool(10);
+
+        for (int i=0; i<participantsNumber; i++) {
+            executor.submit(() -> {
+               try {
+                   concertService.increaseParticipants(concert.getId());
+                   successCount.incrementAndGet();
+               } catch (Exception e) {
+                   log.error(e.getMessage());
+               } finally {
+                   countDownLatch.countDown();
+               }
+            });
+        }
+
+        // 대기
+        countDownLatch.await();
+
+        concert = concertRepository.findById(concert.getId()).orElseThrow();
+
+        System.out.println("======= 멀티 스레드 테스트 결과 =======");
+        System.out.println(concert.getName());
+        System.out.println("시도한 사람 : " + participantsNumber);
+        System.out.println("DB 참가자 수 " + concert.getCurrentParticipants() + "/" + concert.getMaxParticipants());
+        System.out.println("increase 메서드 호출 횟수 : " + successCount);
     }
 }

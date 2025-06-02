@@ -1,4 +1,4 @@
-package com.jeong;
+package com.jeong.service;
 
 import com.jeong.domain.Concert;
 import com.jeong.repository.ConcertRepository;
