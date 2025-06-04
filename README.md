@@ -8,7 +8,7 @@
 
 
 
-## 직렬. 단순 for문
+## 1. 직렬. 단순 for문
 [ConcertServiceTest.java](src/test/java/com/jeong/test/ConcertServiceTest.java)
 > ======= 싱글 스레드 테스트 결과 =======
 > 
@@ -24,7 +24,7 @@
 
 
 
-## transcational (REPETABLE-READ)
+## 2. transcational (REPETABLE-READ)
 [ConcertServiceTest.java](src/test/java/com/jeong/test/ConcertServiceTest.java)
 transactional만으로 병렬 처리 충돌을 막을 수 있는가?
 
@@ -84,7 +84,7 @@ flush 시점에 쿼리는 JAVA 코드 순서와 상관 없이 반드시 다음 �
   2. UPDATE
   3. DELETE
 
-이제 데드락이 왜 발생했는지를 분석해보자.
+이제 실제 예시를 통해 데드락이 왜 발생 했고 어떻게 해결하는지를 알아보자.
 ```java
     /** 데드락 걸리는 코드 */
     @Transactional
@@ -119,9 +119,9 @@ flush 시점에 쿼리는 JAVA 코드 순서와 상관 없이 반드시 다음 �
     }
 ```
 위에서 flush, commit 시점에 병렬적으로 S-LOCK이 발생되는 경우,
-다른 트랜잭션에서는 UPDATE문 실행이 불가능하다. X-LOCK을 얻을 수 없기 때문임.
+다른 트랜잭션에서는 UPDATE문 실행이 불가능하다. X-LOCK을 얻을 수 없기 때문이다.
 
-이로인해 S-LOCK에서 서로 코드 진행이 멈추게 되고, 데드락이 발생한다.
+이로인해 S-LOCK에서 병렬적으로 실행되는 트랜잭션 내의 코드 진행이 멈추게 되고, 데드락이 발생한다.
 
 따라서 다음과 같이 해결할 필요가 있다.
 
@@ -147,5 +147,44 @@ flush 시점에 쿼리는 JAVA 코드 순서와 상관 없이 반드시 다음 �
         usersConcertRepository.save(usersConcert);
     }
 ```
+
+#### 코드 실행 결과
+``` text
+======= 멀티 스레드 테스트 결과 =======
+    잔나비 콘서트
+    시도한 사람 : 200
+    생성된 사람 : 200
+    DB 참가자 수 10/100
+    increase 메서드 호출 횟수 : 200
+```
+
+실행 결과를 보면, 데드락은 발생하지 않았지만, 여전히 DB에 참가자 수가
+제대로 반영되지 않은 모습을 보인다.
+
+#### 왜 이럴까?
+
+이유는 2번과 동일하다.
+이를 해결하기 위해서는 명시적으로 락 기법을 사용할 필요가 있다.
+MYSQL에서 쿼리 실행 시 지원하는 자동 LOCK으로는 한계가 있다.
+
+#### 해결법
+이를 해결하기 위해서는 트랜잭션의 시작과 동시에 LOCK을 걸어야한다.
+
+"이 ROW를 수정할테니까 이 ROW 접근하지마!" 를 해야한다는 것이다.
+
+
+## LOCK 기법
+
+LOCK은 크게 2가지 기법이 있다.
+- Pessimistic Lock (비관적 락)
+- Optimistic Lock (낙관적 락)
+
+말 그대로 '비관적 락'은 충돌이 발생할 것으로 예측(비관적으로 예측)하여 락을 명시적으로 거는 기법
+
+'낙관적 락'은 충돌이 발생하지 않을 것이라고 예측하여 락이 아닌 충돌되는 상황에 코드를 처름부터 다시 시작시켜
+데이터를 반영하는 기법이다. '락을 걸어서 막는다'라고는 볼 수 없지만... 락과 비슷한 기능을 한다고 볼 수 있다.
+
+
+
 
 

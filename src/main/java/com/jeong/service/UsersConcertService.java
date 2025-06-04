@@ -13,13 +13,13 @@ import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class UsersConcertService {
 
     private final UsersRepository usersRepository;
     private final ConcertRepository concertRepository;
     private final UsersConcertRepository usersConcertRepository;
 
-    @Transactional
     public void joinConcert(Long usersId, Long concertId) {
         Users participant = usersRepository.findById(usersId).orElseThrow(() -> new EntityNotFoundException("[ERROR] 유저를 찾을 수 없음"));
         Concert concert = concertRepository.findById(concertId).orElseThrow(() -> new EntityNotFoundException("[ERROR] 콘서트를 찾을 수 없음"));
@@ -39,7 +39,6 @@ public class UsersConcertService {
     }
 
     /** 데드락 걸리는 코드 */
-    @Transactional
     public void deadLockJoinConcert(Long usersId, Long concertId) {
         // 1. SELECT users -> 읽기, MVCC 스냅샷, 락 없음
         Users participant = usersRepository.findById(usersId).orElseThrow(() -> new EntityNotFoundException("[ERROR] 유저를 찾을 수 없음"));
@@ -60,4 +59,41 @@ public class UsersConcertService {
 
         return; // COMMIT
     }
+
+
+    // 비관적 락 기법
+    public void joinConcertWithPessimisticLock(Long usersId, Long concertId) {
+        // get pessimistic Lock
+        Concert concert = concertRepository.findByIdWithPessimisticLock(concertId).orElseThrow(() -> new EntityNotFoundException("[ERROR] 콘서트를 찾을 수 없음"));
+        Users participant = usersRepository.findById(usersId).orElseThrow(() -> new EntityNotFoundException("[ERROR] 유저를 찾을 수 없음"));
+
+        concert.increaseParticipants();
+
+        UsersConcert usersConcert = UsersConcert
+                .builder()
+                .concert(concert)
+                .users(participant)
+                .build();
+
+        usersConcertRepository.save(usersConcert);
+    }
+
+
+    // 낙관적 락 기법
+    public void joinConcertWithOptimisticLock(Long usersId, Long concertId) {
+        // get pessimistic Lock
+        Concert concert = concertRepository.findByIdWithOptimisticLock(concertId).orElseThrow(() -> new EntityNotFoundException("[ERROR] 콘서트를 찾을 수 없음"));
+        Users participant = usersRepository.findById(usersId).orElseThrow(() -> new EntityNotFoundException("[ERROR] 유저를 찾을 수 없음"));
+
+        concert.increaseParticipants();
+
+        UsersConcert usersConcert = UsersConcert
+                .builder()
+                .concert(concert)
+                .users(participant)
+                .build();
+
+        usersConcertRepository.save(usersConcert);
+    }
+
 }
